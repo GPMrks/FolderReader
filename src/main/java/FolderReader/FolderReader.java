@@ -19,6 +19,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.*;
+import java.util.stream.Stream;
 
 public class FolderReader implements Runnable {
     public void FolderReader() throws IOException {
@@ -53,12 +54,13 @@ public class FolderReader implements Runnable {
             File directory = null;
             if (result == JFileChooser.APPROVE_OPTION) {
                 directory = chooseDirectory.getSelectedFile();
-                System.out.println("Selected file: " + directory.getAbsolutePath());
+                System.out.println("Selected folder: " + directory.getAbsolutePath());
             }
 
             // Get a list of all the files in the folder
             Collection<File> files = null;
             try {
+                assert directory != null;
                 files = FileUtils.listFiles(directory, null, true);
             } catch (UncheckedIOException e) {
                 JOptionPane.showMessageDialog(null, "Acesso negado a pasta." + e.getMessage());
@@ -71,6 +73,7 @@ public class FolderReader implements Runnable {
             SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
 
             // Get the file names and store them in the list
+            assert files != null;
             for (File file : files) {
                 fileNames.add(file.getName());
                 fileSize.add((double) file.length());
@@ -93,12 +96,12 @@ public class FolderReader implements Runnable {
             name.setCellValue("Nome do Arquivo");
             Cell size = titles.createCell(1);
             size.setCellValue("Tamanho");
-            Cell path = titles.createCell(2);
-            path.setCellValue("Caminho");
+            Cell totalSize = titles.createCell(2);
+            totalSize.setCellValue("Tamanho Total");
             Cell creationDate = titles.createCell(3);
             creationDate.setCellValue("Criado em");
-            Cell totalSize = titles.createCell(4);
-            totalSize.setCellValue("Tamanho Total");
+            Cell path = titles.createCell(4);
+            path.setCellValue("Caminho");
 
 //        JProgressBar progressBar = LoadingScreen.ProgressBar();
 
@@ -118,9 +121,9 @@ public class FolderReader implements Runnable {
                 // create a cell
                 Cell fileNameCell = row.createCell(0);
                 Cell fileSizeCell = row.createCell(1);
-                Cell filePathCell = row.createCell(2);
+                totalSizeCell = row.createCell(2);
                 Cell fileCreationDateCell = row.createCell(3);
-                totalSizeCell = row.createCell(4);
+                Cell filePathCell = row.createCell(4);
 
                 // set the cell value
                 fileNameCell.setCellValue(fileNames.get(i));
@@ -128,7 +131,14 @@ public class FolderReader implements Runnable {
                 double sizeFormated = (fileSize.get(i) / (1024 * 1024));
                 fileSizeCell.setCellValue(String.format("%.3f KB", sizeFormated));
 
-                filePathCell.setCellValue(filePaths.get(i));
+                String filePath = filePaths.get(i);
+                String pathFormatted = filePath
+                        .replace("[/", "")
+                        .replace("/]", "")
+                        .replace("[", "")
+                        .replace("\\]", "");
+
+                filePathCell.setCellValue(pathFormatted);
 
                 fileCreationDateCell.setCellValue(fileCreationTimes.get(i));
 
@@ -140,28 +150,27 @@ public class FolderReader implements Runnable {
 
             }
 
+            assert totalSizeCell != null;
             totalSizeCell.setCellValue(String.format("%.3f KB", sum));
 
             // Close the frame
             frame.dispose();
 
             JFileChooser chooseFileDestination = new JFileChooser();
-            chooseFileDestination.setCurrentDirectory(new
-
-                    File(System.getProperty("user.home")));
-            chooseFileDestination.setFileFilter(new
-
-                    FileNameExtensionFilter("Excel Files", "xlsx"));
+            chooseFileDestination.setCurrentDirectory(new File(System.getProperty("user.home")));
+            chooseFileDestination.setFileFilter(new FileNameExtensionFilter("Excel Files", "xlsx"));
             int res = chooseFileDestination.showSaveDialog(null);
             File selectedFile = null;
             if (res == JFileChooser.APPROVE_OPTION) {
                 selectedFile = chooseFileDestination.getSelectedFile();
                 if (!selectedFile.getName().endsWith(".xlsx")) {
                     selectedFile = new File(selectedFile.getAbsolutePath() + ".xlsx");
+                    System.out.println("Selected destination: " + selectedFile);
                 }
             }
 
             // Write the workbook to a file
+            assert selectedFile != null;
             File outputFile = new File(selectedFile.toURI());
             FileOutputStream fileOutputStream = new FileOutputStream(outputFile);
             workbook.write(fileOutputStream);
