@@ -22,16 +22,20 @@ import java.util.*;
 import java.util.stream.Stream;
 
 public class FolderReader implements Runnable {
-    public void FolderReader() throws IOException {
+    public void FolderReader() throws IOException, UnsupportedLookAndFeelException, ClassNotFoundException, InstantiationException, IllegalAccessException {
 
         JFrame frame = new JFrame("Progress...");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        UIManager.getSystemLookAndFeelClassName();
+        UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
 
         // Create a JProgressBar
         JProgressBar progressBar = new JProgressBar();
         progressBar.setMinimum(0);
         progressBar.setMaximum(100);
         progressBar.setStringPainted(true);
+
+        int progress = 0;
 
         // Add the progress bar to the frame
         frame.add(progressBar, BorderLayout.CENTER);
@@ -84,7 +88,6 @@ public class FolderReader implements Runnable {
                 Date creationDate = new Date(attributes.creationTime().toMillis());
 
                 fileCreationTimes.add(simpleDateFormat.format(creationDate));
-
             }
 
             // Create the Excel workbook
@@ -105,15 +108,15 @@ public class FolderReader implements Runnable {
 
 //        JProgressBar progressBar = LoadingScreen.ProgressBar();
 
+            double sum = 0;
+            // Write the file names to the sheet
+            Cell totalSizeCell = null;
+
             // Set the size of the frame and make it visible
             frame.pack();
             frame.setLocationRelativeTo(null);
             frame.setSize(400, 100);
             frame.setVisible(true);
-
-            double sum = 0;
-            // Write the file names to the sheet
-            Cell totalSizeCell = null;
 
             for (int i = 1; i < fileNames.size(); i++) {
                 // create a row
@@ -144,10 +147,9 @@ public class FolderReader implements Runnable {
 
                 sum += sizeFormated;
 
-                int bar = (int) ((i / (double) fileNames.size()) * 100);
+                int bar = (int) ((i / (double) fileNames.size() * 1) * 100);
                 progressBar.setValue(bar);
                 progressBar.setString(bar + "%");
-
             }
 
             assert totalSizeCell != null;
@@ -188,7 +190,8 @@ public class FolderReader implements Runnable {
         //Code for process
         try {
             FolderReader();
-        } catch (IOException e) {
+        } catch (IOException | UnsupportedLookAndFeelException | ClassNotFoundException | InstantiationException |
+                 IllegalAccessException e) {
             JOptionPane.showMessageDialog(null, e.getMessage());
             throw new RuntimeException(e);
         }
