@@ -14,17 +14,20 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
-import java.util.*;
-import java.util.stream.Stream;
 
 public class FolderReader implements Runnable {
+
     public void FolderReader() throws IOException, UnsupportedLookAndFeelException, ClassNotFoundException, InstantiationException, IllegalAccessException {
 
-        JFrame frame = new JFrame("Progress...");
+        JFrame frame = new JFrame();
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         UIManager.getSystemLookAndFeelClassName();
         UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -34,8 +37,6 @@ public class FolderReader implements Runnable {
         progressBar.setMinimum(0);
         progressBar.setMaximum(100);
         progressBar.setStringPainted(true);
-
-        int progress = 0;
 
         // Add the progress bar to the frame
         frame.add(progressBar, BorderLayout.CENTER);
@@ -51,43 +52,47 @@ public class FolderReader implements Runnable {
             System.out.println(System.getProperty("os.name"));
 
             // Get the folder containing the files
-            JFileChooser chooseDirectory = new JFileChooser();
-            chooseDirectory.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-            chooseDirectory.setCurrentDirectory(new File(System.getProperty("user.home")));
-            int result = chooseDirectory.showOpenDialog(null);
-            File directory = null;
-            if (result == JFileChooser.APPROVE_OPTION) {
-                directory = chooseDirectory.getSelectedFile();
-                System.out.println("Selected folder: " + directory.getAbsolutePath());
-            }
+            List<File> files = null;
 
-            // Get a list of all the files in the folder
-            Collection<File> files = null;
             try {
-                assert directory != null;
-                files = FileUtils.listFiles(directory, null, true);
-            } catch (UncheckedIOException e) {
-                JOptionPane.showMessageDialog(null, "Acesso negado a pasta." + e.getMessage());
+                File directory = getFile();
+                // Get a list of all the files in the folder
+                try {
+                    files = (List<File>) FileUtils.listFiles(directory, null, true);
+                } catch (UncheckedIOException e) {
+                    JOptionPane.showMessageDialog(null, "Acesso negado a pasta. \n" + e.getMessage());
+                    throw new AccessDeniedException(e.getMessage());
+                }
+            } catch (NullPointerException e) {
+                throw new NullPointerException();
             }
 
-//        File[] files = directory.listFiles();
-            System.out.println();
+            // Set the size of the frame and make it visible
+            frame.pack();
+            frame.setTitle("Lendo arquivos...");
+            frame.setLocationRelativeTo(null);
+            frame.setSize(400, 100);
+            frame.setVisible(true);
 
             String pattern = "dd-MM-yyyy - HH:mm:ss";
             SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
 
-            // Get the file names and store them in the list
+            // Get the file names and store them in the lists
             assert files != null;
-            for (File file : files) {
-                fileNames.add(file.getName());
-                fileSize.add((double) file.length());
-                filePaths.add(Arrays.toString(file.getPath().split(file.getName())));
+            for (int i = 0; i < files.size(); i++) {
+                fileNames.add(files.get(i).getName());
+                fileSize.add((double) files.get(i).length());
+                filePaths.add(Arrays.toString(files.get(i).getPath().split(files.get(i).getName())));
 
-                BasicFileAttributes attributes = Files.readAttributes(file.toPath(), BasicFileAttributes.class);
+                BasicFileAttributes attributes = Files.readAttributes(files.get(i).toPath(), BasicFileAttributes.class);
 
                 Date creationDate = new Date(attributes.creationTime().toMillis());
 
                 fileCreationTimes.add(simpleDateFormat.format(creationDate));
+
+                int bar = (int) ((i / (double) files.size()) * 100);
+                progressBar.setValue(bar);
+                progressBar.setString(bar + "%");
             }
 
             // Create the Excel workbook
@@ -106,17 +111,11 @@ public class FolderReader implements Runnable {
             Cell path = titles.createCell(4);
             path.setCellValue("Caminho");
 
-//        JProgressBar progressBar = LoadingScreen.ProgressBar();
 
-            double sum = 0;
             // Write the file names to the sheet
+            frame.setTitle("Escrevendo documento xlsx...");
             Cell totalSizeCell = null;
-
-            // Set the size of the frame and make it visible
-            frame.pack();
-            frame.setLocationRelativeTo(null);
-            frame.setSize(400, 100);
-            frame.setVisible(true);
+            double sum = 0;
 
             for (int i = 1; i < fileNames.size(); i++) {
                 // create a row
@@ -131,8 +130,7 @@ public class FolderReader implements Runnable {
                 // set the cell value
                 fileNameCell.setCellValue(fileNames.get(i));
 
-                double sizeFormated = (fileSize.get(i) / (1024 * 1024));
-                fileSizeCell.setCellValue(String.format("%.3f KB", sizeFormated));
+                formatSize(fileSizeCell, fileSize.get(i));
 
                 String filePath = filePaths.get(i);
                 String pathFormatted = filePath
@@ -145,31 +143,22 @@ public class FolderReader implements Runnable {
 
                 fileCreationDateCell.setCellValue(fileCreationTimes.get(i));
 
-                sum += sizeFormated;
+                sum += fileSize.get(i);
 
-                int bar = (int) ((i / (double) fileNames.size() * 1) * 100);
+                int bar = (int) ((i / (double) files.size()) * 100);
                 progressBar.setValue(bar);
                 progressBar.setString(bar + "%");
             }
 
             assert totalSizeCell != null;
-            totalSizeCell.setCellValue(String.format("%.3f KB", sum));
+
+            formatSize(totalSizeCell, sum);
 
             // Close the frame
             frame.dispose();
 
-            JFileChooser chooseFileDestination = new JFileChooser();
-            chooseFileDestination.setCurrentDirectory(new File(System.getProperty("user.home")));
-            chooseFileDestination.setFileFilter(new FileNameExtensionFilter("Excel Files", "xlsx"));
-            int res = chooseFileDestination.showSaveDialog(null);
-            File selectedFile = null;
-            if (res == JFileChooser.APPROVE_OPTION) {
-                selectedFile = chooseFileDestination.getSelectedFile();
-                if (!selectedFile.getName().endsWith(".xlsx")) {
-                    selectedFile = new File(selectedFile.getAbsolutePath() + ".xlsx");
-                    System.out.println("Selected destination: " + selectedFile);
-                }
-            }
+            // Choose destination
+            File selectedFile = selectDestinationOfFile();
 
             // Write the workbook to a file
             assert selectedFile != null;
@@ -181,8 +170,54 @@ public class FolderReader implements Runnable {
 
             JOptionPane.showMessageDialog(null, "Arquivo gerado com sucesso!");
         } catch (HeadlessException | IOException e) {
-            JOptionPane.showMessageDialog(null, "Arquivo não pode ser criado." + e.getMessage());
+            JOptionPane.showMessageDialog(null, "Arquivo não pôde ser criado.");
         }
+    }
+
+    private static void formatSize(Cell sizeCell, double sizeInBytes) {
+        double kb = sizeInBytes / 1024.0;
+        double mb = ((sizeInBytes / 1024.0) / 1024.0);
+        double gb = (((sizeInBytes / 1024.0) / 1024.0) / 1024.0);
+        double tb = ((((sizeInBytes / 1024.0) / 1024.0) / 1024.0) / 1024.0);
+
+        if (tb > 1) {
+            sizeCell.setCellValue(String.format("%.2f TB", tb));
+        } else if (gb > 1) {
+            sizeCell.setCellValue(String.format("%.2f GB", gb));
+        } else if (mb > 1) {
+            sizeCell.setCellValue(String.format("%.2f MB", mb));
+        } else {
+            sizeCell.setCellValue(String.format("%.2f KB", kb));
+        }
+    }
+
+    private static File getFile() {
+        JFileChooser chooseDirectory = new JFileChooser();
+        chooseDirectory.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        chooseDirectory.setCurrentDirectory(new File(System.getProperty("user.home")));
+        int result = chooseDirectory.showOpenDialog(null);
+        File directory = null;
+        if (result == JFileChooser.APPROVE_OPTION) {
+            directory = chooseDirectory.getSelectedFile();
+            System.out.println("Selected folder: " + directory.getAbsolutePath());
+        }
+        return directory;
+    }
+
+    private static File selectDestinationOfFile() {
+        JFileChooser chooseFileDestination = new JFileChooser();
+        chooseFileDestination.setCurrentDirectory(new File(System.getProperty("user.home")));
+        chooseFileDestination.setFileFilter(new FileNameExtensionFilter("Excel Files", "xlsx"));
+        int res = chooseFileDestination.showSaveDialog(null);
+        File selectedFile = null;
+        if (res == JFileChooser.APPROVE_OPTION) {
+            selectedFile = chooseFileDestination.getSelectedFile();
+            if (!selectedFile.getName().endsWith(".xlsx")) {
+                selectedFile = new File(selectedFile.getAbsolutePath() + ".xlsx");
+                System.out.println("Selected destination: " + selectedFile);
+            }
+        }
+        return selectedFile;
     }
 
     @Override
